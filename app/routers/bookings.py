@@ -161,6 +161,8 @@ def get_booking(
     )
     if booking is None:
         raise AppError(404, "BOOKING_NOT_FOUND", "Booking not found")
+    if user.role != "admin" and booking.user_id != user.id:
+        raise AppError(404, "BOOKING_NOT_FOUND", "Booking not found")
 
     response = serialize_booking(booking)
     response["start_time"] = iso_utc(booking.created_at)
@@ -198,7 +200,7 @@ def cancel_booking(
     now = datetime.utcnow()
     notice = booking.start_time - now
     notice_hours = int(notice.total_seconds() // 3600)
-    if notice_hours > 48:
+    if notice_hours >= 48:
         refund_percent = 100
     elif notice >= timedelta(hours=24):
         refund_percent = 50
