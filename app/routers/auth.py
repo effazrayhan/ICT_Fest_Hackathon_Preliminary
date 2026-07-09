@@ -18,6 +18,8 @@ from ..schemas import LoginRequest, RefreshRequest, RegisterRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+_revoked_refresh_jtis: set[str] = set()
+
 
 @router.post("/register", status_code=201)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
@@ -35,7 +37,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         .first()
     )
     if existing is not None:
-        raise AppError(409, "USERNAME_TAKEN", "Username already taken")
+        raise AppError(409, "USERNAME_TAKEN", "Username already taken in this organization")
 
     user = User(
         org_id=org.id,
@@ -78,6 +80,10 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
     data = decode_token(payload.refresh_token)
     if data.get("type") != "refresh":
         raise AppError(401, "UNAUTHORIZED", "Wrong token type")
+    jti = data.get("jti")
+    if jti in _revoked_refresh_jtis:
+        raise AppError(401, "UNAUTHORIZED", "Refresh token has already been used")
+    _revoked_refresh_jtis.add(jti)
     user = db.query(User).filter(User.id == int(data["sub"])).first()
     if user is None:
         raise AppError(401, "UNAUTHORIZED", "Unknown user")
